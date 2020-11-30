@@ -8,57 +8,10 @@
  * @package Zizaco\Entrust
  */
 
-use Illuminate\Cache\TaggableStore;
 use Illuminate\Support\Facades\Config;
-use Illuminate\Support\Facades\Cache;
 
 trait EntrustRoleTrait
 {
-    //Big block of caching functionality.
-    public function cachedPermissions()
-    {
-        $rolePrimaryKey = $this->primaryKey;
-        $cacheKey = 'entrust_permissions_for_role_' . $this->$rolePrimaryKey;
-        if (Cache::getStore() instanceof TaggableStore) {
-            return Cache::tags(Config::get('entrust.permission_role_table'))->remember($cacheKey, Config::get('cache.ttl', 60), function () {
-                return $this->perms()->get();
-            });
-        } else return $this->perms()->get();
-    }
-
-    public function save(array $options = [])
-    {   //both inserts and updates
-        if (!parent::save($options)) {
-            return false;
-        }
-        if (Cache::getStore() instanceof TaggableStore) {
-            Cache::tags(Config::get('entrust.permission_role_table'))->flush();
-        }
-        return true;
-    }
-
-    public function delete(array $options = [])
-    {   //soft or hard
-        if (!parent::delete($options)) {
-            return false;
-        }
-        if (Cache::getStore() instanceof TaggableStore) {
-            Cache::tags(Config::get('entrust.permission_role_table'))->flush();
-        }
-        return true;
-    }
-
-    public function restore()
-    {   //soft delete undo's
-        if (!parent::restore()) {
-            return false;
-        }
-        if (Cache::getStore() instanceof TaggableStore) {
-            Cache::tags(Config::get('entrust.permission_role_table'))->flush();
-        }
-        return true;
-    }
-
     /**
      * Many-to-Many relations with the user model.
      *
@@ -87,10 +40,8 @@ trait EntrustRoleTrait
      *
      * @return void|bool
      */
-    public static function boot()
+    public static function bootEntrustRoleTrait()
     {
-        parent::boot();
-
         static::deleting(function ($role) {
             if (!method_exists(Config::get('entrust.role'), 'bootSoftDeletes')) {
                 $role->users()->sync([]);
@@ -127,7 +78,7 @@ trait EntrustRoleTrait
             // Return the value of $requireAll;
             return $requireAll;
         } else {
-            foreach ($this->cachedPermissions() as $permission) {
+            foreach ($this->perms as $permission) {
                 if ($permission->name == $name) {
                     return true;
                 }
@@ -150,10 +101,6 @@ trait EntrustRoleTrait
             $this->perms()->sync($inputPermissions);
         } else {
             $this->perms()->detach();
-        }
-
-        if (Cache::getStore() instanceof TaggableStore) {
-            Cache::tags(Config::get('entrust.permission_role_table'))->flush();
         }
     }
 
